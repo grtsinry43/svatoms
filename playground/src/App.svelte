@@ -11,8 +11,8 @@
     likes: 0,
   }
 
-  // Mount once: put the model into context (single data source = store).
-  postContext.mountModelData(initialPost)
+  // Mount once using getter form (Svelte 5 friendly).
+  postContext.mountModelData(() => initialPost)
 
   // Select only the fields each component needs.
   const title = postContext.selectModelData((p) => p?.title ?? 'Untitled')

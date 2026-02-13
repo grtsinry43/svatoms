@@ -1,5 +1,12 @@
 import { getContext, onDestroy, setContext } from 'svelte'
-import { get, readable, writable, type Readable, type Writable } from 'svelte/store'
+import {
+  get,
+  readable,
+  toStore,
+  writable,
+  type Readable,
+  type Writable,
+} from 'svelte/store'
 
 /** Store scope for a model context. */
 export type ModelScope = 'local' | 'global'
@@ -29,12 +36,29 @@ export interface MountModelDataOptions<T> extends ProvideModelDataOptions<T> {
   resetOnDestroy?: boolean
 }
 
+/** Reactive source for model data. */
+export type ModelDataSource<T> = Readable<T | null> | (() => T | null)
+/** Value or reactive source for model data. */
+export type ModelDataInput<T> = T | null | ModelDataSource<T>
+/** `mountModelData` call signatures. */
+export interface MountModelDataFn<T> {
+  (source: ModelDataSource<T>, opts?: MountModelDataOptions<T>): Writable<T | null>
+  /**
+   * @deprecated Pass a getter `() => data` or a readable store instead.
+   * Static values capture only the initial snapshot in Svelte 5 runes mode.
+   */
+  (data: T | null, opts?: MountModelDataOptions<T>): Writable<T | null>
+}
+
 export interface SelectModelDataOptions<T> {
   /** Equality function for selector result; default: Object.is */
   equals?: EqualityFn<T>
 }
 
 const defaultEquals: EqualityFn<any> = Object.is
+const isStoreLike = <T>(value: unknown): value is Readable<T> =>
+  !!value && typeof value === 'object' && typeof (value as Readable<T>).subscribe === 'function'
+const isDataGetter = <T>(value: unknown): value is () => T => typeof value === 'function'
 
 const createSelectorStore = <S, T>(
   source: Readable<S>,
@@ -88,18 +112,33 @@ export const createModelDataContext = <Model>(
 
   /**
    * Provide model data into context and auto reset on destroy.
+   * Accepts a static value, a getter `() => value`, or a readable store.
    * This is the recommended entry point for pages/layouts.
    */
-  const mountModelData = (
-    data: Model | null,
+  const mountModelDataImpl = (
+    input: ModelDataInput<Model>,
     opts: MountModelDataOptions<Model> = {},
   ) => {
-    const store = provideModelData(data, opts)
+    const source = isStoreLike<Model | null>(input)
+      ? input
+      : isDataGetter<Model | null>(input)
+        ? toStore(input)
+        : null
+    const initialData: Model | null = source ? null : (input as Model | null)
+    const store = provideModelData(initialData, opts)
+    const stopSync = source?.subscribe((next) => store.set(next))
+
     if (opts.resetOnDestroy !== false) {
-      onDestroy(() => store.set(null))
+      onDestroy(() => {
+        stopSync?.()
+        store.set(null)
+      })
+    } else if (stopSync) {
+      onDestroy(stopSync)
     }
     return store
   }
+  const mountModelData = mountModelDataImpl as MountModelDataFn<Model>
 
   /** Provide an existing store directly into context. */
   const provideModelStore = (store: Writable<Model | null>) => {

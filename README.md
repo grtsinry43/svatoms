@@ -66,11 +66,9 @@ export const postContext = createModelDataContext<Post>({ name: 'post' })
   import { postContext } from '$lib/post-context'
   let { data } = $props()
 
-  const postStore = postContext.mountModelData(data.post)
-  $effect(() => {
-    // Sync on client-side navigation when only data changes.
-    postContext.syncModelData(postStore, data.post)
-  })
+  // Recommended in Svelte 5 runes mode:
+  // pass a getter to keep model data in sync automatically.
+  postContext.mountModelData(() => data.post)
 </script>
 
 <slot />
@@ -134,17 +132,13 @@ export const load = async ({ params }) => {
   import { postContext } from '$lib/post-context'
   let { data } = $props()
 
-  const postStore = postContext.mountModelData(data.post)
-  $effect(() => {
-    // Sync on client-side navigation when only data changes.
-    postContext.syncModelData(postStore, data.post)
-  })
+  postContext.mountModelData(() => data.post)
 </script>
 
 <slot />
 ```
 
-Why sync? On SvelteKit client-side navigation, the component may stay mounted while only `data` changes, so you need `$effect` to push the new model into the store.
+Why getter? On SvelteKit client-side navigation, the component may stay mounted while only `data` changes. Passing a getter keeps context store synced automatically.
 
 **3) Select slices anywhere**
 
@@ -191,10 +185,7 @@ Why sync? On SvelteKit client-side navigation, the component may stay mounted wh
 
   let user = $state<User>({ id: '1', name: 'Ada', role: 'admin' })
 
-  const userStore = userContext.mountModelData(user)
-  $effect(() => {
-    userContext.syncModelData(userStore, user)
-  })
+  userContext.mountModelData(() => user)
 
   const { updateModelData } = userContext.useModelActions()
 
@@ -228,8 +219,10 @@ Create a context manager for a specific model type.
 
 - `provideModelData(data, opts?)`
   - Set context + write initial data (no auto cleanup)
-- `mountModelData(data, opts?)`
+- `mountModelData(dataOrSource, opts?)`
   - Same as `provideModelData`, but resets to `null` on destroy
+  - Supports static value, getter `() => value`, or `Readable` store input
+  - Static value input is supported for compatibility, but marked deprecated in TypeScript
 - `provideModelStore(store)`
   - Inject a custom store directly
 - `useModelStore(fallback?)`
@@ -265,14 +258,15 @@ Use `equals` to avoid re-renders when your selector returns derived objects.
 You can override per call:
 
 ```ts
-postContext.mountModelData(data.post, { scope: 'global' })
+postContext.mountModelData(() => data.post, { scope: 'global' })
 ```
 
 ## Notes
 
 - Call `mountModelData` during component initialization (top-level of `<script>`), not inside functions.
 - Svelte 5 runes mode uses `$effect`; in Svelte 4 you can use `$:` instead.
-- Use `syncModelData` or `store.set()` if your `data` can change after navigation.
+- In Svelte 5 runes mode, prefer `mountModelData(() => data.xxx)` to avoid `state_referenced_locally` warnings.
+- If you pass a static value, use `syncModelData` or `store.set()` when your data changes after navigation.
 
 ## License
 
