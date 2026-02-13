@@ -1,7 +1,7 @@
 {
   "name": "svatoms",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Svelte model data flow utilities with selectors.",
   "author": "grtsinry43 <grtsinry43@outlook.com>",
   "license": "MIT",
